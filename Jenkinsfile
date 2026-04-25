@@ -39,17 +39,21 @@ pipeline {
         stage('Build & Push with Kaniko') {
             steps {
                 script {
-                    sh '$KUBECTL delete pod -n jenkins kaniko-${SERVICE_NAME}-* --ignore-not-found=true --force --grace-period=0 || true'
+                    // ✅ FIX 1 — delete par nom exact avec BUILD_NUMBER, pas wildcard
+                    sh "$KUBECTL delete pod kaniko-${env.SERVICE_NAME}-${BUILD_NUMBER} -n jenkins --ignore-not-found=true --force --grace-period=0 || true"
+
                     def repoUrl = scm.getUserRemoteConfigs()[0].getUrl()
                     def branch  = scm.getBranches()[0].getName().replace('*/', '')
+
+                    // ✅ FIX 2 — DOCKER_IMAGE déjà propre depuis le backend (wassimdev/nginx-demo:latest)
                     def podYaml = """
 apiVersion: v1
 kind: Pod
 metadata:
-  name: kaniko-${SERVICE_NAME}-${BUILD_NUMBER}
+  name: kaniko-${env.SERVICE_NAME}-${BUILD_NUMBER}
   namespace: jenkins
   labels:
-    app: kaniko-${SERVICE_NAME}
+    app: kaniko-${env.SERVICE_NAME}
 spec:
   serviceAccountName: kaniko-sa
   restartPolicy: Never
@@ -61,7 +65,7 @@ spec:
       - --context=git://${repoUrl.replace('https://', '')}
       - --git=branch=${branch}
       - --dockerfile=Dockerfile
-      - --destination=${DOCKER_IMAGE}
+      - --destination=${env.DOCKER_IMAGE}
       - --cache=true
     volumeMounts:
     - name: docker-secret
@@ -77,6 +81,7 @@ spec:
                     writeFile file: 'kaniko-pod.yaml', text: podYaml
                     sh '$KUBECTL apply -f kaniko-pod.yaml'
                 }
+
                 sh '''
                     echo "Attente du build Kaniko..."
                     for i in $(seq 1 60); do
@@ -133,15 +138,16 @@ spec:
 
     post {
         success {
-            sh '''curl -s -X POST http://172.25.50.101:5000/api/jenkins/webhook \
+            // ✅ FIX 3 — IP corrigée + timeout + || true pour ne jamais bloquer
+            sh '''curl -s --connect-timeout 5 -X POST http://192.168.254.129:5000/api/jenkins/webhook \
               -H "Content-Type: application/json" \
-              -d "{\"job_name\": \"$JOB_NAME\", \"build_number\": $BUILD_NUMBER, \"result\": \"SUCCESS\"}"'''
+              -d "{\"job_name\": \"$JOB_NAME\", \"build_number\": $BUILD_NUMBER, \"result\": \"SUCCESS\"}" || true'''
             echo 'Deploiement reussi !'
         }
         failure {
-            sh '''curl -s -X POST http://172.25.50.101:5000/api/jenkins/webhook \
+            sh '''curl -s --connect-timeout 5 -X POST http://192.168.254.129:5000/api/jenkins/webhook \
               -H "Content-Type: application/json" \
-              -d "{\"job_name\": \"$JOB_NAME\", \"build_number\": $BUILD_NUMBER, \"result\": \"FAILURE\"}"'''
+              -d "{\"job_name\": \"$JOB_NAME\", \"build_number\": $BUILD_NUMBER, \"result\": \"FAILURE\"}" || true'''
             sh '$KUBECTL describe deployment $SERVICE_NAME -n $K8S_NAMESPACE || true'
             echo 'Deploiement echoue !'
         }
