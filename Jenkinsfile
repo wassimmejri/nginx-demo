@@ -39,13 +39,11 @@ pipeline {
         stage('Build & Push with Kaniko') {
             steps {
                 script {
-                    // ✅ FIX 1 — delete par nom exact avec BUILD_NUMBER, pas wildcard
                     sh "$KUBECTL delete pod kaniko-${env.SERVICE_NAME}-${BUILD_NUMBER} -n jenkins --ignore-not-found=true --force --grace-period=0 || true"
 
                     def repoUrl = scm.getUserRemoteConfigs()[0].getUrl()
                     def branch  = scm.getBranches()[0].getName().replace('*/', '')
 
-                    // ✅ FIX 2 — DOCKER_IMAGE déjà propre depuis le backend (wassimdev/nginx-demo:latest)
                     def podYaml = """
 apiVersion: v1
 kind: Pod
@@ -138,16 +136,23 @@ spec:
 
     post {
         success {
-            // ✅ FIX 3 — IP corrigée + timeout + || true pour ne jamais bloquer
-            sh '''curl -s --connect-timeout 5 -X POST http://192.168.254.129:5000/api/jenkins/webhook \
-              -H "Content-Type: application/json" \
-              -d "{\"job_name\": \"$JOB_NAME\", \"build_number\": $BUILD_NUMBER, \"result\": \"SUCCESS\"}" || true'''
+            script {
+                sh """
+                    curl -s --connect-timeout 5 -X POST http://192.168.254.129:5000/api/jenkins/webhook \\
+                      -H 'Content-Type: application/json' \\
+                      -d '{"job_name": "${env.JOB_NAME}", "build_number": ${env.BUILD_NUMBER}, "result": "SUCCESS"}' || true
+                """
+            }
             echo 'Deploiement reussi !'
         }
         failure {
-            sh '''curl -s --connect-timeout 5 -X POST http://192.168.254.129:5000/api/jenkins/webhook \
-              -H "Content-Type: application/json" \
-              -d "{\"job_name\": \"$JOB_NAME\", \"build_number\": $BUILD_NUMBER, \"result\": \"FAILURE\"}" || true'''
+            script {
+                sh """
+                    curl -s --connect-timeout 5 -X POST http://192.168.254.129:5000/api/jenkins/webhook \\
+                      -H 'Content-Type: application/json' \\
+                      -d '{"job_name": "${env.JOB_NAME}", "build_number": ${env.BUILD_NUMBER}, "result": "FAILURE"}' || true
+                """
+            }
             sh '$KUBECTL describe deployment $SERVICE_NAME -n $K8S_NAMESPACE || true'
             echo 'Deploiement echoue !'
         }
