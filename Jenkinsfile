@@ -6,19 +6,19 @@ pipeline {
         SERVICE_NAME  = "${env.SERVICE_NAME  ?: 'nginx-demo'}"
         REPLICAS      = "${env.REPLICAS      ?: '1'}"
         SERVICE_PORT  = "${env.SERVICE_PORT  ?: '80'}"
-        KUBECTL       = '/var/jenkins_home/kubectl'   // ← CHANGEMENT 1
+        KUBECTL       = '/home/jenkins/kubectl'
     }
     stages {
 
         stage('Install kubectl') {
             steps {
                 sh '''
-                    if ! /var/jenkins_home/kubectl version --client > /dev/null 2>&1; then
+                    if ! /home/jenkins/kubectl version --client > /dev/null 2>&1; then
                         curl -LO https://dl.k8s.io/release/v1.30.0/bin/linux/amd64/kubectl
                         chmod +x kubectl
-                        mv kubectl /var/jenkins_home/kubectl
+                        mv kubectl /home/jenkins/kubectl
                     fi
-                    /var/jenkins_home/kubectl version --client
+                    /home/jenkins/kubectl version --client
                 '''
             }
         }
@@ -138,7 +138,7 @@ spec:
         success {
             script {
                 sh """
-                    curl -s --connect-timeout 5 -X POST http://172.25.50.101:5000/api/jenkins/webhook \\
+                    curl -s --connect-timeout 5 -X POST http://192.168.254.129:5000/api/jenkins/webhook \\
                       -H 'Content-Type: application/json' \\
                       -d '{"job_name": "${env.JOB_NAME}", "build_number": ${env.BUILD_NUMBER}, "result": "SUCCESS"}' || true
                 """
@@ -148,7 +148,7 @@ spec:
         failure {
             script {
                 sh """
-                    curl -s --connect-timeout 5 -X POST http://172.25.50.101:5000/api/jenkins/webhook \\
+                    curl -s --connect-timeout 5 -X POST http://192.168.254.129:5000/api/jenkins/webhook \\
                       -H 'Content-Type: application/json' \\
                       -d '{"job_name": "${env.JOB_NAME}", "build_number": ${env.BUILD_NUMBER}, "result": "FAILURE"}' || true
                 """
