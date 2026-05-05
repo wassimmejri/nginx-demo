@@ -6,7 +6,7 @@ pipeline {
         SERVICE_NAME  = "${env.SERVICE_NAME  ?: 'nginx-demo'}"
         REPLICAS      = "${env.REPLICAS      ?: '1'}"
         SERVICE_PORT  = "${env.SERVICE_PORT  ?: '80'}"
-        KUBECTL       = '/home/jenkins/kubectl'
+        KUBECTL       = '/var/jenkins_home/kubectl'
     }
     stages {
 
@@ -16,9 +16,9 @@ pipeline {
                     if ! /home/jenkins/kubectl version --client > /dev/null 2>&1; then
                         curl -LO https://dl.k8s.io/release/v1.30.0/bin/linux/amd64/kubectl
                         chmod +x kubectl
-                        mv kubectl /home/jenkins/kubectl
+                        mv kubectl /var/jenkins_home/kubectl
                     fi
-                    /home/jenkins/kubectl version --client
+                    /var/jenkins_home/kubectl version --client
                 '''
             }
         }
